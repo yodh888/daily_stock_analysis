@@ -29,6 +29,10 @@ on:
         required: false
         type: boolean
         default: false
+      stock_override:
+        description: '手动指定股票代码（逗号分隔），填了就跳过选股，直接分析'
+        required: false
+        default: ''
 
 concurrency:
   group: sequoia-dsa
@@ -120,7 +124,16 @@ jobs:
           FEISHU_WEBHOOK_URL: ${{ secrets.SEQUOIA_FEISHU_WEBHOOK_URL || 'https://example.invalid/unused' }}
           SEQUOIA_MAX_PICKS: ${{ github.event.inputs.max_picks || vars.SEQUOIA_MAX_PICKS || '10' }}
           SEQUOIA_FORCE: ${{ github.event.inputs.force_screen }}
+          STOCK_OVERRIDE: ${{ github.event.inputs.stock_override }}
         run: |
+          if [ -n "$STOCK_OVERRIDE" ]; then
+            echo "跳过选股，使用手动指定股票: $STOCK_OVERRIDE"
+            echo "$STOCK_OVERRIDE" > sequoia_picks.txt
+            COUNT=$(echo "$STOCK_OVERRIDE" | tr ',' '\n' | wc -l)
+            echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+            echo "picks=$STOCK_OVERRIDE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           EXTRA=""
           if [ "$SEQUOIA_FORCE" = "true" ]; then EXTRA="--force"; fi
           python scripts/sequoia_bridge.py --max-picks "$SEQUOIA_MAX_PICKS" $EXTRA
