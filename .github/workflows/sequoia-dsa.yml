@@ -78,7 +78,10 @@ jobs:
             if [ "$COUNT" -ge 4000 ]; then echo "数据完整，跳过播种"; exit 0; fi
           fi
           echo "尝试从 Release($SEED_TAG) 下载种子数据库..."
-          if gh release download "$SEED_TAG" --repo "${{ github.repository }}" --pattern sequoia_v2.db --output "$DB" --clobber; then
+          if gh release download "$SEED_TAG" --repo "${{ github.repository }}" --pattern sequoia_v2.db.gz --output /tmp/seed.db.gz --clobber; then
+            gunzip -c /tmp/seed.db.gz > "$DB"
+            echo "种子数据库(gz)已就位，之后走增量更新"
+          elif gh release download "$SEED_TAG" --repo "${{ github.repository }}" --pattern sequoia_v2.db --output "$DB" --clobber; then
             echo "种子数据库已就位，之后走增量更新"
           else
             echo "没有找到种子资源，将走正常回填（约 3~4 小时）"
