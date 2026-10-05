@@ -64,6 +64,27 @@ jobs:
           restore-keys: |
             sequoia-enhanced-db-
 
+      - name: 播种行情数据库（首次，来自 Release 资源）
+        working-directory: dsa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SEED_TAG: ${{ vars.SEQUOIA_DB_SEED_TAG || 'db-seed' }}
+        run: |
+          DB="${{ github.workspace }}/dsa/_sequoia/data/sequoia_v2.db"
+          mkdir -p "$(dirname "$DB")"
+          if [ -f "$DB" ]; then
+            COUNT=$(python3 -c "import sqlite3;print(sqlite3.connect('$DB').execute('select count(distinct symbol) from stock_daily').fetchone()[0])" 2>/dev/null || echo 0)
+            echo "已有数据库，股票数=$COUNT"
+            if [ "$COUNT" -ge 4000 ]; then echo "数据完整，跳过播种"; exit 0; fi
+          fi
+          echo "尝试从 Release($SEED_TAG) 下载种子数据库..."
+          if gh release download "$SEED_TAG" --repo "${{ github.repository }}" --pattern sequoia_v2.db --output "$DB" --clobber; then
+            echo "种子数据库已就位，之后走增量更新"
+          else
+            echo "没有找到种子资源，将走正常回填（约 3~4 小时）"
+          fi
+
+
       - name: 设置 Python
         uses: actions/setup-python@v5
         with:

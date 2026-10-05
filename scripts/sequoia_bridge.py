@@ -22,8 +22,9 @@ import os
 import sys
 import traceback
 
-MIN_SYMBOLS_FOR_BACKFILL = 100
 DEFAULT_MAX_PICKS = 10
+# 少于这个数量就认为数据库不完整, 需要回填(全市场约 5200 只)
+MIN_SYMBOLS_FOR_BACKFILL = int(os.environ.get("SEQUOIA_MIN_SYMBOLS", "4000"))
 
 
 def _load_sequoia(sequoia_dir: str):
@@ -147,7 +148,7 @@ def main() -> None:
 
     local_symbols = engine.get_local_symbols()
     if len(local_symbols) < MIN_SYMBOLS_FOR_BACKFILL:
-        print(f"[bridge] 本地仅有 {len(local_symbols)} 只股票, 开始历史回填 ...", flush=True)
+        print(f"[bridge] 本地仅有 {len(local_symbols)} 只股票(阈值 {MIN_SYMBOLS_FOR_BACKFILL}), 开始历史回填 ...", flush=True)
         engine.backfill(engine.get_all_symbols())
     elif not args.skip_sync:
         count = engine.sync_today_bulk()
