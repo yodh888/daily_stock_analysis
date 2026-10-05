@@ -15,7 +15,17 @@ on:
         required: false
         default: '10'
       force_run:
-        description: '跳过交易日检查（A股节假日调试用）'
+        description: '跳过 DSA 的交易日检查（A股节假日调试用）'
+        required: false
+        type: boolean
+        default: false
+      force_screen:
+        description: '强制跑选股（跳过 Sequoia-X 交易日判断，假日回填数据用）'
+        required: false
+        type: boolean
+        default: false
+      backfill_only:
+        description: '只回填历史行情，不跑 DSA 分析'
         required: false
         type: boolean
         default: false
@@ -85,7 +95,11 @@ jobs:
           # Sequoia-X 的 Settings 必填字段；这里只用于通过校验，不实际推送
           FEISHU_WEBHOOK_URL: ${{ secrets.SEQUOIA_FEISHU_WEBHOOK_URL || 'https://example.invalid/unused' }}
           SEQUOIA_MAX_PICKS: ${{ github.event.inputs.max_picks || vars.SEQUOIA_MAX_PICKS || '10' }}
-        run: python scripts/sequoia_bridge.py --max-picks "$SEQUOIA_MAX_PICKS"
+          SEQUOIA_FORCE: ${{ github.event.inputs.force_screen }}
+        run: |
+          EXTRA=""
+          if [ "$SEQUOIA_FORCE" = "true" ]; then EXTRA="--force"; fi
+          python scripts/sequoia_bridge.py --max-picks "$SEQUOIA_MAX_PICKS" $EXTRA
 
       - name: 保存 Sequoia-X 行情数据库
         if: always()
@@ -104,7 +118,7 @@ jobs:
       # DSA 分析。这里只列了常用配置，若你用别的模型/推送渠道，
       # 把官方 00-daily-analysis.yml 里对应的 env 行复制过来即可。
       - name: DSA 深度分析
-        if: steps.screen.outputs.count != '0' && steps.screen.outputs.count != ''
+        if: steps.screen.outputs.count != '0' && steps.screen.outputs.count != '' && github.event.inputs.backfill_only != 'true'
         working-directory: dsa
         env:
           STOCK_LIST: ${{ steps.screen.outputs.picks }}
@@ -132,8 +146,12 @@ jobs:
           python main.py --stocks "${{ steps.screen.outputs.picks }}" $EXTRA
 
       - name: 今日无候选股
-        if: steps.screen.outputs.count == '0'
+        if: steps.screen.outputs.count == '0' && github.event.inputs.backfill_only != 'true'
         run: echo "今日没有股票触发 Sequoia-X 策略，跳过 DSA 分析。"
+
+      - name: 仅回填模式完成
+        if: github.event.inputs.backfill_only == 'true'
+        run: echo "仅回填模式：行情数据库已更新并缓存，跳过 DSA 分析。"
 
       - name: 上传选股结果与报告
         if: always()
