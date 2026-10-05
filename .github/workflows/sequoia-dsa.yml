@@ -1,11 +1,12 @@
 name: Sequoia-X 选股 + DSA 分析
 
 # 放在 daily_stock_analysis fork 的 .github/workflows/sequoia-dsa.yml
+# Sequoia-X 源码来自本仓库的 sequoia-enhanced 分支（个人增强版：8 策略 + 基本面 + 共振）
 # 需要先禁用官方 00-daily-analysis.yml 的 schedule，否则会重复分析两遍。
 
 on:
   schedule:
-    # 北京时间 19:30 = UTC 11:30，周一到周五跑
+    # 北京时间 19:30 = UTC 11:30，周一到周五
     - cron: '30 11 * * 1-5'
   workflow_dispatch:
     inputs:
@@ -29,7 +30,8 @@ permissions:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # 首次要在美国机房回填 5200 只 A 股历史（可能 3~4 小时），给它足够时间
+    timeout-minutes: 355
 
     steps:
       - name: 检出 daily_stock_analysis
@@ -37,20 +39,20 @@ jobs:
         with:
           path: dsa
 
-      - name: 检出 Sequoia-X
+      - name: 检出 Sequoia-X 增强版
         uses: actions/checkout@v5
         with:
-          repository: sngyai/Sequoia-X
-          ref: master
+          repository: ${{ github.repository }}
+          ref: sequoia-enhanced
           path: dsa/_sequoia
 
       - name: 恢复 Sequoia-X 行情数据库
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: dsa/_sequoia/data
-          key: sequoia-db-${{ github.run_id }}
+          key: sequoia-enhanced-db-${{ github.run_id }}
           restore-keys: |
-            sequoia-db-
+            sequoia-enhanced-db-
 
       - name: 设置 Python
         uses: actions/setup-python@v5
@@ -66,7 +68,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install "pydantic-settings>=2.0" "rich>=13.0" "python-dotenv>=1.0" "baostock>=0.9" "pandas>=2.0" "requests>=2.31"
+          pip install "pydantic-settings>=2.0" "rich>=13.0" "python-dotenv>=1.0" "baostock>=0.9" "pandas>=2.0" "requests>=2.31" "akshare>=1.10"
 
       - name: 准备目录
         working-directory: dsa
@@ -79,12 +81,21 @@ jobs:
           SEQUOIA_DIR: ${{ github.workspace }}/dsa/_sequoia
           DB_PATH: ${{ github.workspace }}/dsa/_sequoia/data/sequoia_v2.db
           PICKS_FILE: ${{ github.workspace }}/dsa/sequoia_picks.txt
+          START_DATE: ${{ vars.SEQUOIA_START_DATE || '2024-01-01' }}
           # Sequoia-X 的 Settings 必填字段；这里只用于通过校验，不实际推送
           FEISHU_WEBHOOK_URL: ${{ secrets.SEQUOIA_FEISHU_WEBHOOK_URL || 'https://example.invalid/unused' }}
           SEQUOIA_MAX_PICKS: ${{ github.event.inputs.max_picks || vars.SEQUOIA_MAX_PICKS || '10' }}
         run: python scripts/sequoia_bridge.py --max-picks "$SEQUOIA_MAX_PICKS"
 
+      - name: 保存 Sequoia-X 行情数据库
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: dsa/_sequoia/data
+          key: sequoia-enhanced-db-${{ github.run_id }}
+
       - name: 显示候选股
+        if: always()
         working-directory: dsa
         run: |
           echo "候选股: ${{ steps.screen.outputs.picks }}"
@@ -93,7 +104,7 @@ jobs:
       # DSA 分析。这里只列了常用配置，若你用别的模型/推送渠道，
       # 把官方 00-daily-analysis.yml 里对应的 env 行复制过来即可。
       - name: DSA 深度分析
-        if: steps.screen.outputs.count != '0'
+        if: steps.screen.outputs.count != '0' && steps.screen.outputs.count != ''
         working-directory: dsa
         env:
           STOCK_LIST: ${{ steps.screen.outputs.picks }}
