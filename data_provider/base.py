@@ -68,6 +68,49 @@ def summarize_exception(exc: Exception) -> Tuple[str, str]:
     return error_type, " ".join(message.split())
 
 
+def normalize_volume_to_shares(
+    df: pd.DataFrame,
+    *,
+    volume_col: str = "volume",
+    amount_col: str = "amount",
+    high_col: str = "high",
+) -> pd.DataFrame:
+    """把成交量统一归一为「股」口径。
+
+    部分数据源（东方财富系：efinance / akshare）返回的成交量单位是「手」
+    （1 手 = 100 股），而本项目其余链路（baostock 日线、腾讯日线与实时行情）
+    统一使用「股」。口径不一致会出现「成交量较昨日放大 100 倍」这类误判。
+
+    这里不按板块硬编码，而是用「成交额 ÷ 成交量」反推均价，再与当日最高价
+    交叉校验：若均价远高于当日最高价，说明该行成交量是「手」，需要 ×100。
+    科创板 / ETF 等本身返回「股」的场景不会被误转。
+    """
+    if df is None or getattr(df, "empty", True):
+        return df
+    if not {volume_col, amount_col, high_col}.issubset(set(df.columns)):
+        return df
+
+    try:
+        volume = pd.to_numeric(df[volume_col], errors="coerce")
+        amount = pd.to_numeric(df[amount_col], errors="coerce")
+        high = pd.to_numeric(df[high_col], errors="coerce")
+    except Exception:
+        return df
+
+    valid = (volume > 0) & (amount > 0) & (high > 0)
+    if not bool(valid.any()):
+        return df
+
+    avg_price = amount / volume.where(volume > 0)
+    needs_convert = valid & (avg_price > high * 3)
+    if not bool(needs_convert.any()):
+        return df
+
+    result = df.copy()
+    result.loc[needs_convert, volume_col] = volume[needs_convert] * 100
+    return result
+
+
 def normalize_stock_code(stock_code: str) -> str:
     """
     Normalize stock code by stripping exchange prefixes/suffixes.

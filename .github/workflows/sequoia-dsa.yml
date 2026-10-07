@@ -192,13 +192,6 @@ jobs:
           SEARXNG_PUBLIC_INSTANCES_ENABLED: ${{ vars.SEARXNG_PUBLIC_INSTANCES_ENABLED || 'false' }}
           NEWS_STRATEGY_PROFILE: ${{ vars.NEWS_STRATEGY_PROFILE || 'short' }}
           NEWS_MAX_AGE_DAYS: ${{ vars.NEWS_MAX_AGE_DAYS || '3' }}
-          # ── 修复成交量单位不一致（东财返回「手」，其他源返回「股」）──
-          # 让返回「股」的数据源优先，避免出现「较昨日放大100倍」的误报
-          BAOSTOCK_PRIORITY: ${{ vars.BAOSTOCK_PRIORITY || '0' }}
-          EFINANCE_PRIORITY: ${{ vars.EFINANCE_PRIORITY || '99' }}
-          AKSHARE_PRIORITY: ${{ vars.AKSHARE_PRIORITY || '98' }}
-          # 实时行情固定用腾讯（它已正确把「手」转成「股」），后面保留兜底
-          REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
           WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
           FEISHU_WEBHOOK_URL: ${{ secrets.DSA_FEISHU_WEBHOOK_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

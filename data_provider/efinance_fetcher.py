@@ -63,6 +63,7 @@ from .base import (
     is_st_stock,
     is_kc_cy_stock,
     normalize_stock_code,
+    normalize_volume_to_shares,
     _is_hk_market,
     _is_etf_code as _is_a_share_etf_code,
 )
@@ -596,6 +597,10 @@ class EfinanceFetcher(BaseFetcher):
         
         # 重命名列
         df = df.rename(columns=column_mapping)
+
+        # 东财返回的成交量单位是「手」，统一归一为「股」（与 baostock/腾讯一致）
+        df = normalize_volume_to_shares(df)
+
         
         # Fallback: if OHLC columns are missing (e.g. very old data path), fill from close
         if 'close' in df.columns and 'open' not in df.columns:

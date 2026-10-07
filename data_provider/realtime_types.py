@@ -161,6 +161,25 @@ class UnifiedRealtimeQuote:
     high_52w: Optional[float] = None        # 52周最高
     low_52w: Optional[float] = None         # 52周最低
     
+    def __post_init__(self) -> None:
+        """把成交量统一归一为「股」口径。
+
+        部分数据源（东方财富系）返回的成交量单位是「手」(1 手 = 100 股)，
+        而本项目统一约定为「股」（与 baostock、腾讯行情一致）。这里用
+        「成交额 ÷ 成交量」反推均价，若均价远高于当日最高价，说明单位是
+        「手」，需要 ×100；已经是「股」的数据不会被误转。
+        """
+        try:
+            volume = float(self.volume) if self.volume else 0.0
+            amount = float(self.amount) if self.amount else 0.0
+            high = float(self.high) if self.high else 0.0
+        except (TypeError, ValueError):
+            return
+        if volume <= 0 or amount <= 0 or high <= 0:
+            return
+        if (amount / volume) > high * 3:
+            self.volume = int(volume * 100)
+
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典（过滤 None 值）"""
         result = {
